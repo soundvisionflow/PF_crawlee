@@ -4,6 +4,9 @@
     "description": "Crawler for Property Finder listings",
     "type": "commonjs",
     "main": "propertyfinder_office_scraper.cjs",
+    "engines": {
+        "node": "22.14.0"
+    },
     "scripts": {
         "start": "node propertyfinder_office_scraper.cjs",
         "build": "npx playwright install --with-deps chromium"
