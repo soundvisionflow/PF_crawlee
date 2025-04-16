@@ -1,17 +1,5 @@
 services:
   - type: worker
     name: pf-crawlee
-    env: node
-    buildCommand: |
-      apt-get update
-      apt-get install -y chromium
-      which chromium
-      chromium --version
-      npm install
-    startCommand: node propertyfinder_office_scraper.cjs
-    plan: free
-    envVars:
-      - key: NODE_VERSION
-        value: 22.14.0
-      - key: PUPPETEER_SKIP_CHROMIUM_DOWNLOAD
-        value: "true" 
+    env: docker
+    plan: free 

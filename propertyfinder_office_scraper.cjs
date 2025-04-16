@@ -93,13 +93,12 @@ const results = [];
 
 // ---------- Main Function ----------
 async function run() {
-    const chromePath = process.env.PUPPETEER_EXECUTABLE_PATH || findChrome();
+    const chromePath = '/usr/bin/chromium';
     console.log('Using Chrome path:', chromePath);
     
     const browser = await puppeteer.launch({
         headless: true,
         executablePath: chromePath,
-        product: 'chrome',
         args: [
             '--no-sandbox',
             '--disable-setuid-sandbox',
@@ -108,9 +107,7 @@ async function run() {
             '--disable-gpu',
             '--window-size=1920,1080',
             '--disable-web-security',
-            '--disable-features=IsolateOrigins,site-per-process',
-            '--enable-logging',
-            '--v=1'
+            '--disable-features=IsolateOrigins,site-per-process'
         ]
     });
 
