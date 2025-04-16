@@ -4,9 +4,42 @@ const puppeteer = require('puppeteer-extra');
 const StealthPlugin = require('puppeteer-extra-plugin-stealth');
 const fs = require('fs');
 const { parse } = require('json2csv');
+const { execSync } = require('child_process');
 
 // Apply the stealth plugin
 puppeteer.use(StealthPlugin());
+
+// Function to find Chrome executable
+function findChrome() {
+    const possiblePaths = [
+        '/usr/bin/google-chrome',
+        '/usr/bin/google-chrome-stable',
+        '/usr/bin/chromium',
+        '/usr/bin/chromium-browser',
+    ];
+    
+    // Try to find Chrome using which command
+    try {
+        const chromePath = execSync('which google-chrome').toString().trim();
+        if (chromePath) return chromePath;
+    } catch (e) {
+        console.log('Chrome not found using which command');
+    }
+    
+    // Check possible paths
+    for (const path of possiblePaths) {
+        try {
+            if (fs.existsSync(path)) {
+                console.log('Found Chrome at:', path);
+                return path;
+            }
+        } catch (e) {
+            console.log('Error checking path:', path, e);
+        }
+    }
+    
+    throw new Error('Could not find Chrome installation');
+}
 
 // ---------- Helper Functions ----------
 
@@ -60,11 +93,12 @@ const results = [];
 
 // ---------- Main Function ----------
 async function run() {
-    console.log('Chrome path:', process.env.PUPPETEER_EXECUTABLE_PATH);
+    const chromePath = process.env.PUPPETEER_EXECUTABLE_PATH || findChrome();
+    console.log('Using Chrome path:', chromePath);
     
     const browser = await puppeteer.launch({
         headless: true,
-        executablePath: process.env.PUPPETEER_EXECUTABLE_PATH,
+        executablePath: chromePath,
         product: 'chrome',
         args: [
             '--no-sandbox',
@@ -74,7 +108,9 @@ async function run() {
             '--disable-gpu',
             '--window-size=1920,1080',
             '--disable-web-security',
-            '--disable-features=IsolateOrigins,site-per-process'
+            '--disable-features=IsolateOrigins,site-per-process',
+            '--enable-logging',
+            '--v=1'
         ]
     });
 
