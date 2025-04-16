@@ -1,6 +1,12 @@
 services:
-  - type: web
+  - type: worker
     name: pf-crawlee
-    env: docker
+    env: node
+    buildCommand: npm install
+    startCommand: ./start.sh
     plan: free
-    autoDeploy: true 
+    envVars:
+      - key: PLAYWRIGHT_BROWSERS_PATH
+        value: /opt/render/project/.playwright
+      - key: NODE_VERSION
+        value: 22.14.0 
