@@ -1,11 +1,6 @@
 services:
   - type: web
     name: pf-crawlee
-    env: node
-    buildCommand: npm install && npx playwright install chromium && npx playwright install-deps chromium
-    startCommand: npm start
+    env: docker
     plan: free
-    envVars:
-      - key: NODE_VERSION
-        value: 18.17.0
     autoDeploy: true 
