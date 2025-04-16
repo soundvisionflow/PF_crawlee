@@ -9,36 +9,54 @@ const { execSync } = require('child_process');
 // Apply the stealth plugin
 puppeteer.use(StealthPlugin());
 
-// Function to find Chrome executable
+// Function to find Chrome executable with better debugging
 function findChrome() {
-    const possiblePaths = [
-        '/usr/bin/google-chrome',
+    const CHROME_PATHS = [
         '/usr/bin/google-chrome-stable',
+        '/usr/bin/google-chrome',
         '/usr/bin/chromium',
         '/usr/bin/chromium-browser',
+        '/snap/bin/chromium'
     ];
     
-    // Try to find Chrome using which command
+    // Debug environment
+    console.log('Environment:', process.env);
+    
+    // Try with "which"
     try {
-        const chromePath = execSync('which google-chrome').toString().trim();
-        if (chromePath) return chromePath;
+        console.log('Trying to find Chrome with which command...');
+        const chromePath = execSync('which google-chrome-stable').toString().trim();
+        console.log('Found Chrome with which:', chromePath);
+        if (fs.existsSync(chromePath)) {
+            return chromePath;
+        }
     } catch (e) {
-        console.log('Chrome not found using which command');
+        console.log('Error finding Chrome with which:', e.message);
     }
     
-    // Check possible paths
-    for (const path of possiblePaths) {
+    // Try path discovery
+    for (const path of CHROME_PATHS) {
+        console.log(`Checking path: ${path}`);
         try {
             if (fs.existsSync(path)) {
-                console.log('Found Chrome at:', path);
+                console.log(`Chrome/Chromium found at: ${path}`);
                 return path;
             }
         } catch (e) {
-            console.log('Error checking path:', path, e);
+            console.log(`Error checking ${path}:`, e.message);
         }
     }
     
-    throw new Error('Could not find Chrome installation');
+    // List browser-related binaries
+    try {
+        console.log('Listing all potential browser binaries:');
+        const binaries = execSync('find /usr/bin -name "*chrom*" -o -name "*Chrome*"').toString();
+        console.log(binaries);
+    } catch (e) {
+        console.log('Error listing binaries:', e.message);
+    }
+    
+    throw new Error('Chrome not found - checked all common paths');
 }
 
 // ---------- Helper Functions ----------
@@ -93,23 +111,27 @@ const results = [];
 
 // ---------- Main Function ----------
 async function run() {
-    const chromePath = '/usr/bin/chromium';
+    // Try getting Chrome path from environment or find it
+    const chromePath = process.env.PUPPETEER_EXECUTABLE_PATH || findChrome();
     console.log('Using Chrome path:', chromePath);
     
+    // More detailed browser launch with debugging
+    console.log('Launching browser...');
     const browser = await puppeteer.launch({
         headless: true,
         executablePath: chromePath,
+        ignoreHTTPSErrors: true,
         args: [
             '--no-sandbox',
             '--disable-setuid-sandbox',
             '--disable-dev-shm-usage',
             '--disable-accelerated-2d-canvas',
             '--disable-gpu',
-            '--window-size=1920,1080',
-            '--disable-web-security',
-            '--disable-features=IsolateOrigins,site-per-process'
-        ]
+            '--window-size=1920,1080'
+        ],
+        dumpio: true // Print browser logs to console
     });
+    console.log('Browser launched successfully!');
 
     try {
         const page = await browser.newPage();
@@ -225,3 +247,4 @@ async function run() {
 
 // ---------- Run the Scraper ----------
 run().catch(console.error);
+
