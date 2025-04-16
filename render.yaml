@@ -1,0 +1,8 @@
+services:
+  - type: web
+    name: pf-crawlee
+    env: node
+    buildCommand: npm install && npx playwright install --with-deps chromium
+    startCommand: node propertyfinder_office_scraper.cjs
+    plan: free
+    autoDeploy: true 
