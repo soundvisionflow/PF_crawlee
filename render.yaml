@@ -3,10 +3,12 @@ services:
     name: pf-crawlee
     env: node
     buildCommand: npm install
-    startCommand: ./start.sh
+    startCommand: node propertyfinder_office_scraper.cjs
     plan: free
     envVars:
       - key: PLAYWRIGHT_BROWSERS_PATH
         value: /opt/render/project/.playwright
       - key: NODE_VERSION
-        value: 22.14.0 
+        value: 22.14.0
+      - key: PUPPETEER_SKIP_CHROMIUM_DOWNLOAD
+        value: "true" 

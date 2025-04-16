@@ -8,15 +8,14 @@
         "node": "22.14.0"
     },
     "scripts": {
-        "start": "node propertyfinder_office_scraper.cjs",
-        "build": "npx playwright install --with-deps chromium"
+        "start": "node propertyfinder_office_scraper.cjs"
     },
     "dependencies": {
         "crawlee": "^3.13.2",
         "date-fns": "^2.30.0",
         "json2csv": "^6.0.0-alpha.2",
-        "playwright": "^1.51.1",
-        "playwright-extra": "^4.3.6",
+        "puppeteer": "^22.4.1",
+        "puppeteer-extra": "^3.3.6",
         "puppeteer-extra-plugin-stealth": "^2.11.2"
     }
 }
