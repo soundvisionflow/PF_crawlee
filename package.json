@@ -2,10 +2,11 @@
     "name": "property-finder-crawler",
     "version": "1.0.0",
     "description": "Crawler for Property Finder listings",
-    "type": "module",
-    "main": "property-finder-crawler.js",
+    "type": "commonjs",
+    "main": "propertyfinder_office_scraper.cjs",
     "scripts": {
-        "start": "node property-finder-crawler.js"
+        "start": "node propertyfinder_office_scraper.cjs",
+        "build": "npx playwright install --with-deps chromium"
     },
     "dependencies": {
         "crawlee": "^3.13.2",
