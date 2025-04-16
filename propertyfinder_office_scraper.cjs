@@ -60,9 +60,12 @@ const results = [];
 
 // ---------- Main Function ----------
 async function run() {
+    console.log('Chrome path:', process.env.PUPPETEER_EXECUTABLE_PATH);
+    
     const browser = await puppeteer.launch({
         headless: true,
-        executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || null,
+        executablePath: process.env.PUPPETEER_EXECUTABLE_PATH,
+        product: 'chrome',
         args: [
             '--no-sandbox',
             '--disable-setuid-sandbox',

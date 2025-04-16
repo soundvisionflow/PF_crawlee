@@ -3,7 +3,9 @@ services:
     name: pf-crawlee
     env: node
     buildCommand: |
-      apt-get update && apt-get install -y chromium
+      wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key add -
+      echo "deb http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google.list
+      apt-get update && apt-get install -y google-chrome-stable
       npm install
     startCommand: node propertyfinder_office_scraper.cjs
     plan: free
@@ -13,4 +15,4 @@ services:
       - key: PUPPETEER_SKIP_CHROMIUM_DOWNLOAD
         value: "true"
       - key: PUPPETEER_EXECUTABLE_PATH
-        value: "/usr/bin/chromium" 
+        value: "/usr/bin/google-chrome-stable" 

@@ -8,12 +8,13 @@
         "node": "22.14.0"
     },
     "scripts": {
-        "start": "node propertyfinder_office_scraper.cjs"
+        "start": "node propertyfinder_office_scraper.cjs",
+        "postinstall": "npx puppeteer browsers install chrome"
     },
     "dependencies": {
         "date-fns": "^2.30.0",
         "json2csv": "^6.0.0-alpha.2",
-        "puppeteer": "^22.4.1",
+        "puppeteer-core": "^22.4.1",
         "puppeteer-extra": "^3.3.6",
         "puppeteer-extra-plugin-stealth": "^2.11.2"
     }
