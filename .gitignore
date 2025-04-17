@@ -1,5 +1,7 @@
 node_modules/
+venv/
 .env
 *.log
 results.csv
 .DS_Store
+storage/
