@@ -1,6 +1,6 @@
 // propertyfinder_office_scraper.cjs
 
-const puppeteer = require('puppeteer-extra');
+const puppeteer = require('puppeteer-core');
 const StealthPlugin = require('puppeteer-extra-plugin-stealth');
 const fs = require('fs');
 const { parse } = require('json2csv');
@@ -9,7 +9,7 @@ const { execSync } = require('child_process');
 // Apply the stealth plugin
 puppeteer.use(StealthPlugin());
 
-// Function to find Chrome executable with better debugging
+// Function to find Chrome executable
 function findChrome() {
     // First check environment variable
     if (process.env.PUPPETEER_EXECUTABLE_PATH) {
@@ -17,47 +17,26 @@ function findChrome() {
         return process.env.PUPPETEER_EXECUTABLE_PATH;
     }
 
-    // Check if we're on macOS
-    if (process.platform === 'darwin') {
-        const macPaths = [
-            '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-            '/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary',
-            '/Applications/Chromium.app/Contents/MacOS/Chromium'
-        ];
-        
-        for (const path of macPaths) {
-            console.log(`Checking macOS path: ${path}`);
-            try {
-                if (fs.existsSync(path)) {
-                    console.log(`Chrome found at: ${path}`);
-                    return path;
-                }
-            } catch (e) {
-                console.log(`Error checking ${path}:`, e.message);
+    // Check common paths
+    const paths = [
+        '/usr/bin/google-chrome-stable',
+        '/usr/bin/google-chrome',
+        '/usr/bin/chromium',
+        '/usr/bin/chromium-browser',
+        '/snap/bin/chromium',
+        '/opt/google/chrome/chrome',
+        '/opt/google/chrome/google-chrome'
+    ];
+    
+    for (const path of paths) {
+        console.log(`Checking path: ${path}`);
+        try {
+            if (fs.existsSync(path)) {
+                console.log(`Chrome found at: ${path}`);
+                return path;
             }
-        }
-    } else {
-        // Linux paths
-        const linuxPaths = [
-            '/usr/bin/google-chrome-stable',
-            '/usr/bin/google-chrome',
-            '/usr/bin/chromium',
-            '/usr/bin/chromium-browser',
-            '/snap/bin/chromium',
-            '/opt/google/chrome/chrome',
-            '/opt/google/chrome/google-chrome'
-        ];
-        
-        for (const path of linuxPaths) {
-            console.log(`Checking Linux path: ${path}`);
-            try {
-                if (fs.existsSync(path)) {
-                    console.log(`Chrome found at: ${path}`);
-                    return path;
-                }
-            } catch (e) {
-                console.log(`Error checking ${path}:`, e.message);
-            }
+        } catch (e) {
+            console.log(`Error checking ${path}:`, e.message);
         }
     }
     

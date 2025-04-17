@@ -7,7 +7,7 @@
         "start": "node propertyfinder_office_scraper.cjs"
     },
     "dependencies": {
-        "puppeteer": "21.0.0",
+        "puppeteer-core": "21.0.0",
         "puppeteer-extra": "3.3.6",
         "puppeteer-extra-plugin-stealth": "2.11.2",
         "json2csv": "5.0.7"
