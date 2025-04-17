@@ -47,11 +47,8 @@ const CUTOFF_DATE = new Date("2025-01-01");
     args: [
       '--no-sandbox',
       '--disable-setuid-sandbox',
-      '--disable-dev-shm-usage',
-      '--disable-accelerated-2d-canvas',
-      '--disable-gpu'
-    ],
-    executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || puppeteer.executablePath()
+      '--disable-dev-shm-usage'
+    ]
   });
   
   const page = await browser.newPage();

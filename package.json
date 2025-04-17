@@ -4,15 +4,14 @@
     "description": "Property Finder Office Space Scraper",
     "main": "propertyfinder_office_scraper.cjs",
     "scripts": {
-        "start": "node propertyfinder_office_scraper.cjs",
-        "build": "npm install --production && npm cache clean --force"
+        "start": "node propertyfinder_office_scraper.cjs"
     },
     "dependencies": {
-        "puppeteer": "^21.0.0",
-        "json2csv": "^5.0.7"
+        "puppeteer": "19.11.1",
+        "json2csv": "5.0.7"
     },
     "engines": {
-        "node": ">=18.0.0"
+        "node": "18.19.1"
     },
     "private": true
 }
