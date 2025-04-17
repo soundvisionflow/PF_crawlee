@@ -1,19 +1,17 @@
 {
     "name": "property-finder-scraper",
     "version": "1.0.0",
-    "description": "Property Finder office space scraper",
+    "description": "Property Finder Office Space Scraper",
     "main": "propertyfinder_office_scraper.cjs",
     "scripts": {
         "start": "node propertyfinder_office_scraper.cjs"
     },
     "dependencies": {
-        "crawlee": "^3.0.0",
-        "playwright-extra": "^4.3.6",
-        "puppeteer-extra-plugin-stealth": "^2.11.2",
+        "puppeteer": "^21.0.0",
         "json2csv": "^5.0.7"
     },
     "engines": {
-        "node": "18.19.1"
+        "node": ">=18.0.0"
     },
     "private": true
 }
