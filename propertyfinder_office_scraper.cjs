@@ -178,6 +178,8 @@ const crawler = new PlaywrightCrawler({
     
     let hasNextPage = true;
     let currentPage = 1;
+    let totalListings = 0;
+    
     while (hasNextPage) {
       log.info(`Processing OVERVIEW Page ${currentPage}: ${page.url()}`);
       
@@ -186,7 +188,6 @@ const crawler = new PlaywrightCrawler({
         'article, div.ListingCard, div.card',
         (elements) => {
           return Array.from(elements).map(el => {
-            // You can customize selectors here if needed.
             const title = el.querySelector('h2')?.innerText.trim() || null;
             const location = el.querySelector('[class*="location"]')?.innerText.trim() || null;
             const price = el.querySelector('[class*="price"]')?.innerText.trim() || null;
@@ -199,7 +200,6 @@ const crawler = new PlaywrightCrawler({
                 break;
               }
             }
-            // Overview pages may contain partial information.
             const description = el.querySelector('[class*="description"]')?.innerText.trim() || null;
             const listed = el.querySelector('[class*="listed"]')?.innerText.trim() || null;
             const dateText = el.querySelector('[class*="date"]')?.innerText.trim() || null;
@@ -209,12 +209,13 @@ const crawler = new PlaywrightCrawler({
         }
       );
       
-      console.log('RAW listings:', listings);
+      console.log(`Found ${listings.length} listings on page ${currentPage}`);
       
       for (const item of listings) {
         if (!item.area || item.area < MIN_AREA_SQFT) continue;
         results.push(item);
-        console.log('Valid Listing:', item);
+        totalListings++;
+        console.log(`Valid Listing ${totalListings}:`, item);
         if (item.url) {
           await crawler.addRequests([{ url: item.url, userData: { label: 'DETAIL' } }]);
         }
@@ -235,6 +236,8 @@ const crawler = new PlaywrightCrawler({
       }
       hasNextPage = false;
     }
+    
+    log.info(`Total valid listings found: ${totalListings}`);
   },
   failedRequestHandler: ({ request, log }) => {
     log.error(`❌ Failed to process ${request.url}`);
