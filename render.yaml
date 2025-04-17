@@ -7,4 +7,6 @@ services:
     plan: free
     envVars:
       - key: NODE_ENV
-        value: production 
+        value: production
+      - key: NODE_VERSION
+        value: 18.19.1 
