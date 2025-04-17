@@ -9,7 +9,7 @@ services:
       echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list
       apt-get update
       apt-get install -y google-chrome-stable
-      npm install --production
+      npm install --no-audit --no-fund
     startCommand: node propertyfinder_office_scraper.cjs
     plan: starter
     envVars:
