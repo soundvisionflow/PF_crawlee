@@ -1,12 +1,12 @@
 // propertyfinder_office_scraper.cjs
 
-const puppeteer = require('puppeteer-core');
+const puppeteer = require('puppeteer-extra');
 const StealthPlugin = require('puppeteer-extra-plugin-stealth');
 const fs = require('fs');
 const { parse } = require('json2csv');
 const { execSync } = require('child_process');
 
-// Apply the stealth plugin
+// Add stealth plugin
 puppeteer.use(StealthPlugin());
 
 // Function to find Chrome executable
