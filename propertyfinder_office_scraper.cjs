@@ -3,6 +3,7 @@
 const puppeteer = require('puppeteer-extra');
 const StealthPlugin = require('puppeteer-extra-plugin-stealth');
 const fs = require('fs');
+const path = require('path');
 const { parse } = require('json2csv');
 const { execSync } = require('child_process');
 
@@ -11,36 +12,10 @@ puppeteer.use(StealthPlugin());
 
 // Function to find Chrome executable
 function findChrome() {
-    // First check environment variable
-    if (process.env.PUPPETEER_EXECUTABLE_PATH) {
-        console.log('Using Chrome path from environment:', process.env.PUPPETEER_EXECUTABLE_PATH);
-        return process.env.PUPPETEER_EXECUTABLE_PATH;
-    }
-
-    // Check common paths
-    const paths = [
-        '/usr/bin/google-chrome-stable',
-        '/usr/bin/google-chrome',
-        '/usr/bin/chromium',
-        '/usr/bin/chromium-browser',
-        '/snap/bin/chromium',
-        '/opt/google/chrome/chrome',
-        '/opt/google/chrome/google-chrome'
-    ];
-    
-    for (const path of paths) {
-        console.log(`Checking path: ${path}`);
-        try {
-            if (fs.existsSync(path)) {
-                console.log(`Chrome found at: ${path}`);
-                return path;
-            }
-        } catch (e) {
-            console.log(`Error checking ${path}:`, e.message);
-        }
-    }
-    
-    throw new Error('Chrome not found - checked all common paths');
+    // Use Puppeteer's bundled Chrome
+    const chromePath = puppeteer.executablePath();
+    console.log('Using Puppeteer Chrome at:', chromePath);
+    return chromePath;
 }
 
 // ---------- Helper Functions ----------
@@ -95,113 +70,150 @@ const results = [];
 
 // ---------- Main Function ----------
 async function run() {
-    // Try getting Chrome path from environment or find it
-    const chromePath = process.env.PUPPETEER_EXECUTABLE_PATH || findChrome();
-    console.log('Using Chrome path:', chromePath);
-    
-    // More detailed browser launch with debugging
-    console.log('Launching browser...');
-    const browser = await puppeteer.launch({
-        headless: true,
-        executablePath: chromePath,
-        ignoreHTTPSErrors: true,
-        args: [
-            '--no-sandbox',
-            '--disable-setuid-sandbox',
-            '--disable-dev-shm-usage',
-            '--disable-accelerated-2d-canvas',
-            '--disable-gpu',
-            '--window-size=1920,1080',
-            '--single-process'
-        ],
-        dumpio: true // Print browser logs to console
-    });
-    console.log('Browser launched successfully!');
-
+    let browser;
     try {
+        const chromePath = await findChrome();
+        console.log('Using Chrome at:', chromePath);
+
+        browser = await puppeteer.launch({
+            executablePath: chromePath,
+            headless: "new",
+            args: [
+                '--no-sandbox',
+                '--disable-setuid-sandbox',
+                '--disable-dev-shm-usage',
+                '--disable-accelerated-2d-canvas',
+                '--disable-gpu',
+                '--window-size=1920x1080',
+                '--disable-blink-features=AutomationControlled',
+                '--disable-features=IsolateOrigins,site-per-process',
+                '--disable-site-isolation-trials'
+            ],
+            defaultViewport: {
+                width: 1920,
+                height: 1080
+            }
+        });
+
         const page = await browser.newPage();
-        await page.setViewport({ width: 1920, height: 1080 });
-        await page.setUserAgent(getRandomUserAgent());
         
+        // Set a longer timeout
+        page.setDefaultNavigationTimeout(60000);
+        page.setDefaultTimeout(60000);
+
+        // Set user agent and other headers
+        await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+        await page.setExtraHTTPHeaders({
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'Connection': 'keep-alive',
+            'Upgrade-Insecure-Requests': '1'
+        });
+
+        // Enable stealth mode
+        await page.evaluateOnNewDocument(() => {
+            Object.defineProperty(navigator, 'webdriver', {
+                get: () => undefined
+            });
+        });
+
         // Process overview pages
         let currentUrl = START_URL;
         let hasNextPage = true;
         let currentPage = 1;
+        let retryCount = 0;
+        const maxRetries = 3;
 
-        while (hasNextPage) {
-            console.log(`Processing page ${currentPage}: ${currentUrl}`);
-            await page.goto(currentUrl, { waitUntil: 'networkidle0' });
-            await new Promise(resolve => setTimeout(resolve, 2000));
-
-            // Extract listings
-            const listings = await page.evaluate(() => {
-                return Array.from(document.querySelectorAll('article, div.ListingCard, div.card')).map(el => {
-                    const title = el.querySelector('h2')?.innerText.trim() || null;
-                    const location = el.querySelector('[class*="location"]')?.innerText.trim() || null;
-                    const price = el.querySelector('[class*="price"]')?.innerText.trim() || null;
-                    let area = null;
-                    const allTexts = Array.from(el.querySelectorAll('*')).map(e => e.innerText || '');
-                    for (const txt of allTexts) {
-                        const match = txt.replace(/,/g, '').match(/(\d+)\s*sqft/i);
-                        if (match) {
-                            area = parseInt(match[1], 10);
-                            break;
-                        }
-                    }
-                    const description = el.querySelector('[class*="description"]')?.innerText.trim() || null;
-                    const listed = el.querySelector('[class*="listed"]')?.innerText.trim() || null;
-                    const url = el.querySelector('a')?.href || null;
-                    return { title, location, price, area, description, listed, url };
+        while (hasNextPage && retryCount < maxRetries) {
+            try {
+                console.log(`Processing page ${currentPage}: ${currentUrl}`);
+                await page.goto(currentUrl, { 
+                    waitUntil: 'networkidle0',
+                    timeout: 60000
                 });
-            });
-
-            // Process valid listings
-            for (const item of listings) {
-                if (!item.area || item.area < MIN_AREA_SQFT) continue;
                 
-                if (item.url) {
-                    // Process detail page
-                    const detailPage = await browser.newPage();
-                    await detailPage.setUserAgent(getRandomUserAgent());
-                    await detailPage.goto(item.url, { waitUntil: 'networkidle0' });
-                    await new Promise(resolve => setTimeout(resolve, 2000));
+                // Add a random delay between requests
+                await new Promise(resolve => setTimeout(resolve, 2000 + Math.random() * 3000));
 
-                    const details = await detailPage.evaluate(() => {
-                        const description = document.querySelector('#description article')?.innerText.trim() || null;
-                        const listed = document.querySelector('main div p:nth-child(4)')?.innerText.trim() || null;
-                        return { description, listed };
-                    });
-
-                    item.description = details.description;
-                    item.listed = details.listed;
-                    
-                    if (item.listed) {
-                        const cleanString = item.listed.replace(/listed\s*/i, '').trim();
-                        const parsedDate = parseRelativeTime(cleanString, new Date());
-                        if (parsedDate) {
-                            item.absoluteListedDate = parsedDate.toISOString();
+                // Extract listings
+                const listings = await page.evaluate(() => {
+                    return Array.from(document.querySelectorAll('article, div.ListingCard, div.card')).map(el => {
+                        const title = el.querySelector('h2')?.innerText.trim() || null;
+                        const location = el.querySelector('[class*="location"]')?.innerText.trim() || null;
+                        const price = el.querySelector('[class*="price"]')?.innerText.trim() || null;
+                        let area = null;
+                        const allTexts = Array.from(el.querySelectorAll('*')).map(e => e.innerText || '');
+                        for (const txt of allTexts) {
+                            const match = txt.replace(/,/g, '').match(/(\d+)\s*sqft/i);
+                            if (match) {
+                                area = parseInt(match[1], 10);
+                                break;
+                            }
                         }
+                        const description = el.querySelector('[class*="description"]')?.innerText.trim() || null;
+                        const listed = el.querySelector('[class*="listed"]')?.innerText.trim() || null;
+                        const url = el.querySelector('a')?.href || null;
+                        return { title, location, price, area, description, listed, url };
+                    });
+                });
+
+                // Process valid listings
+                for (const item of listings) {
+                    if (!item.area || item.area < MIN_AREA_SQFT) continue;
+                    
+                    if (item.url) {
+                        // Process detail page
+                        const detailPage = await browser.newPage();
+                        await detailPage.setUserAgent(getRandomUserAgent());
+                        await detailPage.goto(item.url, { waitUntil: 'networkidle0' });
+                        await new Promise(resolve => setTimeout(resolve, 2000));
+
+                        const details = await detailPage.evaluate(() => {
+                            const description = document.querySelector('#description article')?.innerText.trim() || null;
+                            const listed = document.querySelector('main div p:nth-child(4)')?.innerText.trim() || null;
+                            return { description, listed };
+                        });
+
+                        item.description = details.description;
+                        item.listed = details.listed;
+                        
+                        if (item.listed) {
+                            const cleanString = item.listed.replace(/listed\s*/i, '').trim();
+                            const parsedDate = parseRelativeTime(cleanString, new Date());
+                            if (parsedDate) {
+                                item.absoluteListedDate = parsedDate.toISOString();
+                            }
+                        }
+
+                        await detailPage.close();
+                        await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 1000));
                     }
 
-                    await detailPage.close();
-                    await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 1000));
+                    results.push(item);
                 }
 
-                results.push(item);
-            }
+                // Check for next page
+                const nextUrl = await page.evaluate(() => {
+                    const nextButton = document.querySelector('a[aria-label*="Next"]');
+                    return nextButton ? nextButton.href : null;
+                });
 
-            // Check for next page
-            const nextUrl = await page.evaluate(() => {
-                const nextButton = document.querySelector('a[aria-label*="Next"]');
-                return nextButton ? nextButton.href : null;
-            });
-
-            if (nextUrl) {
-                currentUrl = nextUrl;
-                currentPage++;
-                await new Promise(resolve => setTimeout(resolve, 2000 + Math.random() * 1000));
-            } else {
-                hasNextPage = false;
+                if (nextUrl) {
+                    currentUrl = nextUrl;
+                    currentPage++;
+                    await new Promise(resolve => setTimeout(resolve, 2000 + Math.random() * 1000));
+                } else {
+                    hasNextPage = false;
+                }
+            } catch (error) {
+                console.error(`Error processing page ${currentPage}:`, error);
+                retryCount++;
+                if (retryCount >= maxRetries) {
+                    throw new Error(`Failed to process page after ${maxRetries} attempts`);
+                }
+                // Wait before retrying
+                await new Promise(resolve => setTimeout(resolve, 5000));
             }
         }
 
@@ -226,7 +238,9 @@ async function run() {
     } catch (error) {
         console.error('Error during scraping:', error);
     } finally {
-        await browser.close();
+        if (browser) {
+            await browser.close();
+        }
     }
 }
 
