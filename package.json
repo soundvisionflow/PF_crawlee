@@ -4,14 +4,13 @@
     "description": "Property Finder office space scraper",
     "main": "propertyfinder_office_scraper.cjs",
     "scripts": {
-        "start": "node propertyfinder_office_scraper.cjs",
-        "postinstall": "npx puppeteer browsers install chrome"
+        "start": "node propertyfinder_office_scraper.cjs"
     },
     "dependencies": {
-        "puppeteer": "^21.0.0",
-        "puppeteer-extra": "^3.3.6",
-        "puppeteer-extra-plugin-stealth": "^2.11.2",
-        "json2csv": "^5.0.7"
+        "puppeteer": "21.0.0",
+        "puppeteer-extra": "3.3.6",
+        "puppeteer-extra-plugin-stealth": "2.11.2",
+        "json2csv": "5.0.7"
     },
     "engines": {
         "node": "18.19.1"
