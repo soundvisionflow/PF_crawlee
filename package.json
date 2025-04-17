@@ -4,7 +4,8 @@
     "description": "Property Finder Office Space Scraper",
     "main": "propertyfinder_office_scraper.cjs",
     "scripts": {
-        "start": "node propertyfinder_office_scraper.cjs"
+        "start": "node propertyfinder_office_scraper.cjs",
+        "build": "npm install --production && npm cache clean --force"
     },
     "dependencies": {
         "puppeteer": "^21.0.0",

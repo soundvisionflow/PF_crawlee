@@ -2,9 +2,7 @@ services:
   - type: web
     name: property-finder-scraper
     env: node
-    buildCommand: |
-      npm install --production
-      npm cache clean --force
+    buildCommand: npm run build
     startCommand: node propertyfinder_office_scraper.cjs
     plan: free
     envVars:
