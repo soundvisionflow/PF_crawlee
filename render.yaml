@@ -1,21 +1,12 @@
 services:
   - type: worker
-    name: pf-crawlee
+    name: property-finder-scraper
     env: node
-    buildCommand: |
-      apt-get update && apt-get install -y wget gnupg
-      wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key add -
-      echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list
-      apt-get update && apt-get install -y google-chrome-stable
-      google-chrome-stable --version
-      which google-chrome-stable
-      npm install
+    buildCommand: ./build.sh
     startCommand: node propertyfinder_office_scraper.cjs
-    plan: free
+    plan: starter
     envVars:
       - key: NODE_VERSION
-        value: 22.14.0
+        value: 18.x
       - key: PUPPETEER_SKIP_CHROMIUM_DOWNLOAD
-        value: "true"
-      - key: PUPPETEER_EXECUTABLE_PATH
-        value: "/usr/bin/google-chrome-stable" 
+        value: true 

@@ -1,21 +1,18 @@
 {
-    "name": "property-finder-crawler",
+    "name": "property-finder-scraper",
     "version": "1.0.0",
-    "description": "Crawler for Property Finder listings",
-    "type": "commonjs",
+    "description": "Property Finder office space scraper",
     "main": "propertyfinder_office_scraper.cjs",
-    "engines": {
-        "node": "22.14.0"
-    },
     "scripts": {
-        "start": "node propertyfinder_office_scraper.cjs",
-        "postinstall": "npx puppeteer browsers install chrome"
+        "start": "node propertyfinder_office_scraper.cjs"
     },
     "dependencies": {
-        "date-fns": "^2.30.0",
-        "json2csv": "^6.0.0-alpha.2",
-        "puppeteer-core": "^22.4.1",
+        "puppeteer": "^21.0.0",
         "puppeteer-extra": "^3.3.6",
-        "puppeteer-extra-plugin-stealth": "^2.11.2"
+        "puppeteer-extra-plugin-stealth": "^2.11.2",
+        "json2csv": "^5.0.7"
+    },
+    "engines": {
+        "node": ">=18.x"
     }
 }

@@ -1,0 +1,9 @@
+{
+	"id": "nwXduibavym5bin",
+	"json": "{\"id\":\"nwXduibavym5bin\",\"url\":\"https://www.propertyfinder.ae/en/search?l=1&c=3&t=4&fu=0&af=1500&ob=nd\",\"loadedUrl\":\"https://www.propertyfinder.ae/en/search?l=1&c=3&t=4&fu=0&af=1500&ob=nd\",\"uniqueKey\":\"https://www.propertyfinder.ae/en/search?af=1500&c=3&fu=0&l=1&ob=nd&t=4\",\"method\":\"GET\",\"noRetry\":false,\"retryCount\":0,\"errorMessages\":[],\"headers\":{},\"userData\":{\"__crawlee\":{\"state\":4}},\"handledAt\":\"2025-04-16T19:59:41.865Z\"}",
+	"method": "GET",
+	"orderNo": null,
+	"retryCount": 0,
+	"uniqueKey": "https://www.propertyfinder.ae/en/search?af=1500&c=3&fu=0&l=1&ob=nd&t=4",
+	"url": "https://www.propertyfinder.ae/en/search?l=1&c=3&t=4&fu=0&af=1500&ob=nd"
+}

@@ -11,49 +11,54 @@ puppeteer.use(StealthPlugin());
 
 // Function to find Chrome executable with better debugging
 function findChrome() {
-    const CHROME_PATHS = [
-        '/usr/bin/google-chrome-stable',
-        '/usr/bin/google-chrome',
-        '/usr/bin/chromium',
-        '/usr/bin/chromium-browser',
-        '/snap/bin/chromium'
-    ];
-    
-    // Debug environment
-    console.log('Environment:', process.env);
-    
-    // Try with "which"
-    try {
-        console.log('Trying to find Chrome with which command...');
-        const chromePath = execSync('which google-chrome-stable').toString().trim();
-        console.log('Found Chrome with which:', chromePath);
-        if (fs.existsSync(chromePath)) {
-            return chromePath;
-        }
-    } catch (e) {
-        console.log('Error finding Chrome with which:', e.message);
+    // First check environment variable
+    if (process.env.PUPPETEER_EXECUTABLE_PATH) {
+        console.log('Using Chrome path from environment:', process.env.PUPPETEER_EXECUTABLE_PATH);
+        return process.env.PUPPETEER_EXECUTABLE_PATH;
     }
-    
-    // Try path discovery
-    for (const path of CHROME_PATHS) {
-        console.log(`Checking path: ${path}`);
-        try {
-            if (fs.existsSync(path)) {
-                console.log(`Chrome/Chromium found at: ${path}`);
-                return path;
+
+    // Check if we're on macOS
+    if (process.platform === 'darwin') {
+        const macPaths = [
+            '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+            '/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary',
+            '/Applications/Chromium.app/Contents/MacOS/Chromium'
+        ];
+        
+        for (const path of macPaths) {
+            console.log(`Checking macOS path: ${path}`);
+            try {
+                if (fs.existsSync(path)) {
+                    console.log(`Chrome found at: ${path}`);
+                    return path;
+                }
+            } catch (e) {
+                console.log(`Error checking ${path}:`, e.message);
             }
-        } catch (e) {
-            console.log(`Error checking ${path}:`, e.message);
         }
-    }
-    
-    // List browser-related binaries
-    try {
-        console.log('Listing all potential browser binaries:');
-        const binaries = execSync('find /usr/bin -name "*chrom*" -o -name "*Chrome*"').toString();
-        console.log(binaries);
-    } catch (e) {
-        console.log('Error listing binaries:', e.message);
+    } else {
+        // Linux paths
+        const linuxPaths = [
+            '/usr/bin/google-chrome-stable',
+            '/usr/bin/google-chrome',
+            '/usr/bin/chromium',
+            '/usr/bin/chromium-browser',
+            '/snap/bin/chromium',
+            '/opt/google/chrome/chrome',
+            '/opt/google/chrome/google-chrome'
+        ];
+        
+        for (const path of linuxPaths) {
+            console.log(`Checking Linux path: ${path}`);
+            try {
+                if (fs.existsSync(path)) {
+                    console.log(`Chrome found at: ${path}`);
+                    return path;
+                }
+            } catch (e) {
+                console.log(`Error checking ${path}:`, e.message);
+            }
+        }
     }
     
     throw new Error('Chrome not found - checked all common paths');
@@ -127,7 +132,8 @@ async function run() {
             '--disable-dev-shm-usage',
             '--disable-accelerated-2d-canvas',
             '--disable-gpu',
-            '--window-size=1920,1080'
+            '--window-size=1920,1080',
+            '--single-process'
         ],
         dumpio: true // Print browser logs to console
     });
@@ -146,7 +152,7 @@ async function run() {
         while (hasNextPage) {
             console.log(`Processing page ${currentPage}: ${currentUrl}`);
             await page.goto(currentUrl, { waitUntil: 'networkidle0' });
-            await page.waitForTimeout(2000);
+            await new Promise(resolve => setTimeout(resolve, 2000));
 
             // Extract listings
             const listings = await page.evaluate(() => {
@@ -179,7 +185,7 @@ async function run() {
                     const detailPage = await browser.newPage();
                     await detailPage.setUserAgent(getRandomUserAgent());
                     await detailPage.goto(item.url, { waitUntil: 'networkidle0' });
-                    await detailPage.waitForTimeout(2000);
+                    await new Promise(resolve => setTimeout(resolve, 2000));
 
                     const details = await detailPage.evaluate(() => {
                         const description = document.querySelector('#description article')?.innerText.trim() || null;
@@ -199,7 +205,7 @@ async function run() {
                     }
 
                     await detailPage.close();
-                    await page.waitForTimeout(1000 + Math.random() * 1000);
+                    await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 1000));
                 }
 
                 results.push(item);
@@ -214,7 +220,7 @@ async function run() {
             if (nextUrl) {
                 currentUrl = nextUrl;
                 currentPage++;
-                await page.waitForTimeout(2000 + Math.random() * 1000);
+                await new Promise(resolve => setTimeout(resolve, 2000 + Math.random() * 1000));
             } else {
                 hasNextPage = false;
             }
