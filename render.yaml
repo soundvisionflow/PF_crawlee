@@ -1,5 +1,5 @@
 services:
-  - type: worker
+  - type: web
     name: property-finder-scraper
     env: node
     buildCommand: |
@@ -11,7 +11,7 @@ services:
       apt-get install -y google-chrome-stable
       npm install --no-audit --no-fund
     startCommand: node propertyfinder_office_scraper.cjs
-    plan: starter
+    plan: free
     envVars:
       - key: NODE_VERSION
         value: 18.19.1
