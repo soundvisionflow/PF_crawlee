@@ -1,6 +1,7 @@
 const puppeteer = require('puppeteer');
 const fs = require('fs');
 const { parse } = require('json2csv');
+const { errors: { TimeoutError } } = puppeteer;
 
 // Helper: convert relative time (e.g., "8 hours ago") to absolute Date
 function parseRelativeTime(relativeStr, baseDate = new Date()) {
@@ -48,11 +49,36 @@ if (MODE === 'update' && fs.existsSync(META_FILE)) {
   console.log(`Initial mode: using cutoff date ${thresholdDate}`);
 }
 
+// Helper: auto-scroll the page to load dynamic content
+async function autoScroll(page) {
+  await page.evaluate(async () => {
+    await new Promise(resolve => {
+      let totalHeight = 0;
+      const distance = 100;
+      const timer = setInterval(() => {
+        const scrollHeight = document.body.scrollHeight;
+        window.scrollBy(0, distance);
+        totalHeight += distance;
+        if (totalHeight >= scrollHeight) {
+          clearInterval(timer);
+          resolve();
+        }
+      }, 100);
+    });
+  });
+}
+
 async function runScraper() {
-  const browser = await puppeteer.launch({
+  // Configure Puppeteer launch options
+  const launchOptions = {
     headless: 'new',
     args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
-  });
+  };
+  if (process.env.PUPPETEER_EXECUTABLE_PATH) {
+    launchOptions.executablePath = process.env.PUPPETEER_EXECUTABLE_PATH;
+  }
+  console.log('Launching browser with options:', launchOptions);
+  const browser = await puppeteer.launch(launchOptions);
   const page = await browser.newPage();
   await page.setViewport({ width: 1280, height: 800 });
 
@@ -64,12 +90,24 @@ async function runScraper() {
     console.log(`Loading page ${currentPage}: ${url}`);
     await page.goto(url, { waitUntil: 'networkidle0' });
 
-    // Wait for listings to load with extended timeout and additional selector
-    const ITEM_SELECTOR = 'li[role="listitem"], article, div.ListingCard, div.card, div[data-cy="listing-card"], div[data-testid="listing-card"]';
-    await page.waitForSelector(ITEM_SELECTOR, { timeout: 60000 });
+    // scroll to trigger lazy-loaded listings
+    await autoScroll(page);
 
-    // Count raw listing elements; break if none
-    const rawCount = await page.$$eval(ITEM_SELECTOR, els => els.length);
+    // Wait for listings with timeout and count elements
+    const ITEM_SELECTOR = 'li[role="listitem"], article, div.ListingCard, div.card, div[data-cy="listing-card"], div[data-testid="listing-card"]';
+    let rawCount = 0;
+    try {
+      await page.waitForSelector(ITEM_SELECTOR, { timeout: 60000 });
+      rawCount = await page.$$eval(ITEM_SELECTOR, els => els.length);
+    } catch (e) {
+      if (e instanceof TimeoutError) {
+        console.log(`Timeout waiting for items on page ${currentPage}, saving screenshot and ending pagination.`);
+        await page.screenshot({ path: `timeout-page-${currentPage}.png`, fullPage: true });
+        console.log(`Screenshot saved: timeout-page-${currentPage}.png`);
+        break;
+      }
+      throw e;
+    }
     if (rawCount === 0) {
       console.log('No listings found; ending pagination.');
       break;
@@ -77,9 +115,8 @@ async function runScraper() {
     console.log(`Total raw listings found: ${rawCount}`);
 
     // Extract listings
-    const listings = await page.evaluate(() => {
-      const sel = 'li[role="listitem"], article, div.ListingCard, div.card, div[data-cy="listing-card"]';
-      const elements = document.querySelectorAll(sel);
+    const listings = await page.evaluate(selector => {
+      const elements = document.querySelectorAll(selector);
       return Array.from(elements).map(el => {
         const title = el.querySelector('h2')?.innerText.trim() || null;
         const location = el.querySelector('[class*="location"]')?.innerText.trim() || null;
@@ -104,7 +141,7 @@ async function runScraper() {
         const url = el.querySelector('a')?.href || null;
         return { title, location, price, area, listed, url };
       });
-    });
+    }, ITEM_SELECTOR);
 
     // Process items and dedupe
     let anyNew = false;
