@@ -64,11 +64,12 @@ async function runScraper() {
     console.log(`Loading page ${currentPage}: ${url}`);
     await page.goto(url, { waitUntil: 'networkidle0' });
 
-    // Wait for listings to load
-    await page.waitForSelector('li[role="listitem"], article, div.ListingCard, div.card, div[data-cy="listing-card"]');
+    // Wait for listings to load with extended timeout and additional selector
+    const ITEM_SELECTOR = 'li[role="listitem"], article, div.ListingCard, div.card, div[data-cy="listing-card"], div[data-testid="listing-card"]';
+    await page.waitForSelector(ITEM_SELECTOR, { timeout: 60000 });
 
     // Count raw listing elements; break if none
-    const rawCount = await page.$$eval('li[role="listitem"], article, div.ListingCard, div.card, div[data-cy="listing-card"]', els => els.length);
+    const rawCount = await page.$$eval(ITEM_SELECTOR, els => els.length);
     if (rawCount === 0) {
       console.log('No listings found; ending pagination.');
       break;
