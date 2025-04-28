@@ -1,7 +1,6 @@
 const puppeteer = require('puppeteer');
 const fs = require('fs');
 const { parse } = require('json2csv');
-const { errors: { TimeoutError } } = puppeteer;
 
 // Helper: convert relative time (e.g., "8 hours ago") to absolute Date
 function parseRelativeTime(relativeStr, baseDate = new Date()) {
@@ -49,25 +48,6 @@ if (MODE === 'update' && fs.existsSync(META_FILE)) {
   console.log(`Initial mode: using cutoff date ${thresholdDate}`);
 }
 
-// Helper: auto-scroll the page to load dynamic content
-async function autoScroll(page) {
-  await page.evaluate(async () => {
-    await new Promise(resolve => {
-      let totalHeight = 0;
-      const distance = 100;
-      const timer = setInterval(() => {
-        const scrollHeight = document.body.scrollHeight;
-        window.scrollBy(0, distance);
-        totalHeight += distance;
-        if (totalHeight >= scrollHeight) {
-          clearInterval(timer);
-          resolve();
-        }
-      }, 100);
-    });
-  });
-}
-
 async function runScraper() {
   // Configure Puppeteer launch options
   const launchOptions = {
@@ -82,7 +62,12 @@ async function runScraper() {
   const page = await browser.newPage();
   await page.setViewport({ width: 1280, height: 800 });
 
-  // Paginate via URL param, stop when no listings or older than threshold
+  const TEST_PAGINATION = process.env.TEST_PAGINATION === 'true';
+  if (TEST_PAGINATION) {
+    console.log('[PAGINATION TEST MODE]');
+  }
+
+  // Paginate via URL param
   const results = [];
   const seenUrls = new Set();
   for (let currentPage = 1; ; currentPage++) {
@@ -90,31 +75,42 @@ async function runScraper() {
     console.log(`Loading page ${currentPage}: ${url}`);
     await page.goto(url, { waitUntil: 'networkidle0' });
 
-    // scroll to trigger lazy-loaded listings
-    await autoScroll(page);
-
-    // Wait for listings with timeout and count elements
+    // Wait for listings to appear
     const ITEM_SELECTOR = 'li[role="listitem"], article, div.ListingCard, div.card, div[data-cy="listing-card"], div[data-testid="listing-card"]';
-    let rawCount = 0;
+    let listingsExist = false;
     try {
-      await page.waitForSelector(ITEM_SELECTOR, { timeout: 60000 });
-      rawCount = await page.$$eval(ITEM_SELECTOR, els => els.length);
+      // In test mode, just check if container exists quickly
+      // In scrape mode, wait longer for actual items
+      const waitOptions = { timeout: TEST_PAGINATION ? 5000 : 60000 };
+      await page.waitForSelector(ITEM_SELECTOR, waitOptions);
+      listingsExist = true;
     } catch (e) {
-      if (e instanceof TimeoutError) {
-        console.log(`Timeout waiting for items on page ${currentPage}, saving screenshot and ending pagination.`);
-        await page.screenshot({ path: `timeout-page-${currentPage}.png`, fullPage: true });
-        console.log(`Screenshot saved: timeout-page-${currentPage}.png`);
+      // Only treat TimeoutError as fatal if not in test mode
+      if (!TEST_PAGINATION && e.name === 'TimeoutError') {
+        console.log(`Timeout waiting for items on page ${currentPage}.`);
+        // Optionally add screenshot/HTML save here if needed for debug
         break;
+      } else if (TEST_PAGINATION && e.name === 'TimeoutError') {
+        console.log(`Quick check failed for items on page ${currentPage}. Assuming end of results for test.`);
+        listingsExist = false; // Continue to break below
+      } else {
+        break; // Break on other errors
       }
-      throw e;
     }
-    if (rawCount === 0) {
+    // If no listings found (or test mode timeout), stop paginating
+    if (!listingsExist) {
       console.log('No listings found; ending pagination.');
       break;
     }
+    console.log(`Listings container found on page ${currentPage}`);
+    // Skip actual scraping in test mode
+    if (TEST_PAGINATION) {
+      await page.waitForTimeout(1000); // Brief pause before next page in test
+      continue;
+    }
+    // --- Full Scrape Logic --- 
+    const rawCount = await page.$$eval(ITEM_SELECTOR, els => els.length);
     console.log(`Total raw listings found: ${rawCount}`);
-
-    // Extract listings
     const listings = await page.evaluate(selector => {
       const elements = document.querySelectorAll(selector);
       return Array.from(elements).map(el => {
@@ -183,10 +179,10 @@ async function runScraper() {
       }
     }
 
-    // throttle
+    // Throttle only in full scrape mode
     await page.waitForTimeout(2000);
-    // if this page had no new items and beyond threshold, stop
-    if (!anyNew) {
+    // Stop if no new/in-threshold items found (only in full scrape mode)
+    if (!TEST_PAGINATION && !anyNew) {
       console.log('No new or in-threshold listings on page, ending pagination');
       break;
     }
@@ -194,13 +190,15 @@ async function runScraper() {
 
   await browser.close();
 
-  // Save to CSV
-  const fields = ['title','location','price','area','description','listed','url'];
-  fs.writeFileSync('results.csv', parse(results, { fields }));
-  console.log(`Completed: ${results.length} listings saved to results.csv`);
-  // Persist last run timestamp
-  fs.writeFileSync(META_FILE, JSON.stringify({ lastRun: new Date().toISOString() }));
-  console.log(`Updated last run timestamp to now`);
+  // Save results only if not in test mode
+  if (!TEST_PAGINATION) {
+    const fields = ['title','location','price','area','description','listed','url'];
+    fs.writeFileSync('results.csv', parse(results, { fields }));
+    console.log(`Completed: ${results.length} listings saved to results.csv`);
+    // Persist last run timestamp
+    fs.writeFileSync(META_FILE, JSON.stringify({ lastRun: new Date().toISOString() }));
+    console.log(`Updated last run timestamp to now`);
+  }
 }
 
 runScraper(); 
