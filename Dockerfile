@@ -55,6 +55,7 @@ COPY package*.json ./
 
 # Install dependencies
 RUN npm install --production
+RUN npm install @google-cloud/storage
 
 # Copy source code
 COPY . .
@@ -65,4 +66,4 @@ ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome
 
 # Run the scraper
-CMD ["node", "propertyfinder_office_scraper.cjs"] 
+CMD ["node", "office_agent.cjs"]

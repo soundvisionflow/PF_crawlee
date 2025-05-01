@@ -2,9 +2,9 @@
     "name": "property-finder-scraper",
     "version": "1.0.0",
     "description": "Property Finder Office Space Scraper",
-    "main": "propertyfinder_office_scraper.cjs",
+    "main": "office_agent.cjs",
     "scripts": {
-        "start": "node propertyfinder_office_scraper.cjs",
+        "start": "node office_agent.cjs",
         "build": "npm install --production"
     },
     "dependencies": {

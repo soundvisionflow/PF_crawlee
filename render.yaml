@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: property-finder-scraper
+    name: office-agent
     env: docker
     dockerfilePath: Dockerfile
     plan: free
