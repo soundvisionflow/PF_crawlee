@@ -27,7 +27,7 @@ function parseRelativeTime(relativeStr, baseDate = new Date()) {
 }
 
 // Configuration
-const START_URL = 'https://www.propertyfinder.ae/en/search?l=1&c=3&t=4&fu=0&af=1500&ob=nd';
+const START_URL = 'https://www.propertyfinder.ae/en/search?c=3&t=4&fu=0&af=1500&ob=nd&l=1&pt=3&pt=1';
 const MIN_AREA_SQFT = 1500;
 const MONTHS_TO_LOOKBACK = 2;
 const META_FILE = 'lastRun.json';
@@ -50,10 +50,30 @@ if (MODE === 'update' && fs.existsSync(META_FILE)) {
 }
 
 async function runScraper() {
+  let retryCount = 0;
+  const MAX_RETRIES = 3;
+  
+  while (retryCount < MAX_RETRIES) {
+    try {
+      return await runScraperWithRetries();
+    } catch (error) {
+      retryCount++;
+      console.log(`Scraper failed, attempt ${retryCount} of ${MAX_RETRIES}: ${error.message}`);
+      if (retryCount >= MAX_RETRIES) {
+        console.log(`Max retries (${MAX_RETRIES}) reached. Giving up.`);
+        throw error;
+      }
+      console.log(`Waiting 10 seconds before next retry...`);
+      await new Promise(resolve => setTimeout(resolve, 10000));
+    }
+  }
+}
+
+async function runScraperWithRetries() {
   // Configure Puppeteer launch options
   const launchOptions = {
     headless: 'new',
-    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
+    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-web-security', '--disable-features=IsolateOrigins,site-per-process']
   };
   if (process.env.PUPPETEER_EXECUTABLE_PATH) {
     launchOptions.executablePath = process.env.PUPPETEER_EXECUTABLE_PATH;
@@ -61,7 +81,32 @@ async function runScraper() {
   console.log('Launching browser with options:', launchOptions);
   const browser = await puppeteer.launch(launchOptions);
   const page = await browser.newPage();
+  
+  // Set user agent to appear more like a regular browser
+  await page.setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.4896.127 Safari/537.36');
+  
+  // Set viewport to a common desktop resolution
   await page.setViewport({ width: 1280, height: 800 });
+  
+  // Enable request interception for debugging
+  await page.setRequestInterception(true);
+  page.on('request', request => {
+    request.continue();
+  });
+  
+  // Log navigation events for debugging
+  page.on('response', response => {
+    const status = response.status();
+    if (status >= 400) {
+      console.log(`Error ${status} for URL: ${response.url()}`);
+    }
+  });
+
+  // Log console messages from the page
+  page.on('console', msg => console.log('BROWSER CONSOLE:', msg.text()));
+
+  // Log any page errors
+  page.on('pageerror', err => console.log('PAGE ERROR:', err.message));
 
   const TEST_PAGINATION = process.env.TEST_PAGINATION === 'true';
   if (TEST_PAGINATION) {
@@ -104,19 +149,46 @@ async function runScraper() {
     await page.goto(url, { waitUntil: 'networkidle0' });
 
     // Wait for listings to appear
-    const ITEM_SELECTOR = 'li[role="listitem"], article, div.ListingCard, div.card, div[data-cy="listing-card"], div[data-testid="listing-card"]';
+    // More comprehensive selector to catch various listing formats
+    const ITEM_SELECTOR = 'li[role="listitem"], article, div.PropertyCard, div.ListingCard, div.card, div[data-cy="listing-card"], div[data-testid="listing-card"], div.property-card, .property-list-item, [data-testid="property-card"], div.Card, .listing-item';
     let listingsExist = false;
+    
     try {
       // In test mode, just check if container exists quickly
       // In scrape mode, wait longer for actual items
-      const waitOptions = { timeout: TEST_PAGINATION ? 5000 : 60000 };
+      console.log(`Waiting for selector: ${ITEM_SELECTOR}`);
+      const waitOptions = { timeout: TEST_PAGINATION ? 5000 : 120000 }; // Increased timeout to 2 minutes
       await page.waitForSelector(ITEM_SELECTOR, waitOptions);
       listingsExist = true;
     } catch (e) {
+      console.log(`Error waiting for selector: ${e.name} - ${e.message}`);
+      
+      // Take a screenshot to see what's on the page
+      try {
+        const screenshotPath = `screenshot-page-${currentPage}.png`;
+        await page.screenshot({ path: screenshotPath, fullPage: true });
+        
+        // Upload screenshot to Cloud Storage
+        if (bucketName) {
+          await storage.bucket(bucketName).upload(screenshotPath, { destination: screenshotPath });
+          console.log(`Screenshot saved to Cloud Storage: ${screenshotPath}`);
+        }
+        
+        // Debug page content
+        const pageContent = await page.content();
+        fs.writeFileSync(`page-${currentPage}-content.html`, pageContent);
+        if (bucketName) {
+          await storage.bucket(bucketName).upload(`page-${currentPage}-content.html`, 
+            { destination: `page-${currentPage}-content.html` });
+          console.log(`Page HTML saved to Cloud Storage: page-${currentPage}-content.html`);
+        }
+      } catch (screenshotError) {
+        console.log(`Failed to save debug info: ${screenshotError.message}`);
+      }
+      
       // Only treat TimeoutError as fatal if not in test mode
       if (!TEST_PAGINATION && e.name === 'TimeoutError') {
         console.log(`Timeout waiting for items on page ${currentPage}.`);
-        // Optionally add screenshot/HTML save here if needed for debug
         break;
       } else if (TEST_PAGINATION && e.name === 'TimeoutError') {
         console.log(`Quick check failed for items on page ${currentPage}. Assuming end of results for test.`);
@@ -141,28 +213,51 @@ async function runScraper() {
     console.log(`Total raw listings found: ${rawCount}`);
     const listings = await page.evaluate(selector => {
       const elements = document.querySelectorAll(selector);
+      console.log(`Found ${elements.length} matching elements`);
       return Array.from(elements).map(el => {
-        const title = el.querySelector('h2')?.innerText.trim() || null;
-        const location = el.querySelector('[class*="location"]')?.innerText.trim() || null;
-        const price = el.querySelector('[class*="price"]')?.innerText.trim() || null;
+        const title = el.querySelector('h2, h3, [class*="title"], .property-title, [data-testid="title"]')?.innerText.trim() || null;
+        const location = el.querySelector('[class*="location"], [data-testid="location"], .property-location, .card-location, [class*="LocationLabel"]')?.innerText.trim() || null;
+        const price = el.querySelector('[class*="price"], [data-testid="price"], .property-price, .card-price, .PriceLabel')?.innerText.trim() || null;
+        
         let area = null;
         const allTexts = Array.from(el.querySelectorAll('*')).map(e => e.innerText || '');
+        
+        // Try different area patterns
         for (const txt of allTexts) {
-          const match = txt.replace(/,/g, '').match(/(\d+)\s*sq[\s\.]*ft/i);
+          // First try sq ft pattern
+          let match = txt.replace(/,/g, '').match(/(\d+)\s*sq[\s\.]*ft/i);
+          if (match) { area = parseInt(match[1], 10); break; }
+          
+          // Also try m² pattern (convert to sq ft)
+          match = txt.replace(/,/g, '').match(/(\d+)\s*m[\s\.]*²/i);
+          if (match) { area = Math.round(parseInt(match[1], 10) * 10.764); break; }
+          
+          // Also look for sqft without space
+          match = txt.replace(/,/g, '').match(/(\d+)sqft/i);
           if (match) { area = parseInt(match[1], 10); break; }
         }
-        // Extract listing date
-        let listed = el.querySelector('time')?.innerText.trim() || el.querySelector('time')?.getAttribute('datetime') || null;
+        
+        // Extract listing date with more patterns
+        let listed = el.querySelector('time, [class*="date"], [data-testid="date"], .listing-date')?.innerText.trim() 
+          || el.querySelector('time')?.getAttribute('datetime') || null;
+        
         if (!listed) {
           for (const raw of allTexts) {
             const t = raw.replace(/\s+/g, ' ').trim();
-            if (/\d+\s*(minute|hour|day|week|month|year)s?\s+ago/i.test(t) || !isNaN(Date.parse(t))) {
+            if (/\d+\s*(minute|hour|day|week|month|year)s?\s+ago/i.test(t) || 
+                /listed:?\s+\w+/i.test(t) ||
+                !isNaN(Date.parse(t))) {
               listed = t;
               break;
             }
           }
         }
-        const url = el.querySelector('a')?.href || null;
+        
+        // Try multiple ways to get the URL
+        const url = el.querySelector('a')?.href || 
+                   el.closest('a')?.href || 
+                   el.querySelector('[data-testid="property-link"]')?.href || null;
+                   
         return { title, location, price, area, listed, url };
       });
     }, ITEM_SELECTOR);
@@ -245,4 +340,7 @@ async function runScraper() {
   }
 }
 
-runScraper();
+runScraper().catch(err => {
+  console.error('Fatal error in scraper:', err);
+  process.exit(1);
+});
