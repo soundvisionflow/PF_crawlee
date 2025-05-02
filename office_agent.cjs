@@ -33,6 +33,7 @@ const MONTHS_TO_LOOKBACK = 2;
 const META_FILE = 'lastRun.json';
 // Mode: 'initial' scrapes last 2 months; 'update' scrapes only since last run
 const MODE = process.env.MODE || 'initial';
+const isInitial = MODE === 'initial';
 let thresholdDate;
 if (MODE === 'update' && fs.existsSync(META_FILE)) {
   const meta = JSON.parse(fs.readFileSync(META_FILE, 'utf-8'));
@@ -69,8 +70,35 @@ async function runScraper() {
 
   // Paginate via URL param
   const results = [];
-  const seenUrls = new Set();
-  for (let currentPage = 1; ; currentPage++) {
+  const seenKeys = new Set();
+  let maxPages = isInitial ? 15 : 3;
+
+  // Load existing results for deduplication (from Cloud Storage if available)
+  let existingRows = [];
+  const csvFile = 'results.csv';
+  const { Storage } = require('@google-cloud/storage');
+  const storage = new Storage();
+  const bucketName = process.env.BUCKET_NAME;
+  const fsPromises = fs.promises;
+  async function downloadExistingCSV() {
+    if (!bucketName) return;
+    try {
+      await storage.bucket(bucketName).file(csvFile).download({ destination: csvFile });
+      const data = fs.readFileSync(csvFile, 'utf-8');
+      existingRows = data.split('\n').filter(Boolean).map(line => line.split(','));
+      // Build seenKeys set for deduplication
+      for (const row of existingRows.slice(1)) { // skip header
+        if (row.length < 7) continue;
+        const key = row.slice(0, 7).join('|');
+        seenKeys.add(key);
+      }
+    } catch (e) {
+      // No existing file, skip
+    }
+  }
+  await downloadExistingCSV();
+
+  for (let currentPage = 1; currentPage <= maxPages; currentPage++) {
     const url = `${START_URL}&page=${currentPage}`;
     console.log(`Loading page ${currentPage}: ${url}`);
     await page.goto(url, { waitUntil: 'networkidle0' });
@@ -143,8 +171,10 @@ async function runScraper() {
     let anyNew = false;
     for (const item of listings) {
       if (!item.area || item.area < MIN_AREA_SQFT) continue;
-      if (seenUrls.has(item.url)) continue;
-      seenUrls.add(item.url);
+      // Composite key for deduplication
+      const key = [item.title, item.location, item.area, item.price, item.listed, item.url].join('|');
+      if (seenKeys.has(key)) continue;
+      seenKeys.add(key);
 
       // Parse date
       let listedDate = null;
@@ -182,7 +212,7 @@ async function runScraper() {
     // Throttle only in full scrape mode
     await page.waitForTimeout(2000);
     // Stop if no new/in-threshold items found (only in full scrape mode)
-    if (!TEST_PAGINATION && !anyNew) {
+    if (!TEST_PAGINATION && !anyNew && !isInitial) {
       console.log('No new or in-threshold listings on page, ending pagination');
       break;
     }
@@ -193,12 +223,26 @@ async function runScraper() {
   // Save results only if not in test mode
   if (!TEST_PAGINATION) {
     const fields = ['title','location','price','area','description','listed','url'];
-    fs.writeFileSync('results.csv', parse(results, { fields }));
-    console.log(`Completed: ${results.length} listings saved to results.csv`);
+    // Append new results to existing CSV
+    let appendRows = results.map(r => fields.map(f => (r[f] || '').replace(/\n/g, ' ')).join(','));
+    let writeHeader = false;
+    try {
+      await fsPromises.access(csvFile);
+    } catch {
+      writeHeader = true;
+    }
+    const toWrite = (writeHeader ? fields.join(',') + '\n' : '') + appendRows.join('\n') + (appendRows.length ? '\n' : '');
+    fs.appendFileSync(csvFile, toWrite);
+    console.log(`Appended: ${results.length} new listings to results.csv`);
+    // Upload to Cloud Storage
+    if (bucketName) {
+      await storage.bucket(bucketName).upload(csvFile, { destination: csvFile });
+      console.log('results.csv uploaded to Cloud Storage');
+    }
     // Persist last run timestamp
     fs.writeFileSync(META_FILE, JSON.stringify({ lastRun: new Date().toISOString() }));
     console.log(`Updated last run timestamp to now`);
   }
 }
 
-runScraper(); 
+runScraper();
