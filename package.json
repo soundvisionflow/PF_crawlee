@@ -5,11 +5,13 @@
     "main": "office_agent.cjs",
     "scripts": {
         "start": "node office_agent.cjs",
-        "build": "npm install --production"
+        "build": "npm install --production",
+        "test": "TEST_PAGINATION=true node office_agent.cjs"
     },
     "dependencies": {
         "puppeteer": "19.11.1",
-        "json2csv": "5.0.7"
+        "json2csv": "5.0.7",
+        "@google-cloud/storage": "^7.9.0"
     },
     "engines": {
         "node": "18.19.1"

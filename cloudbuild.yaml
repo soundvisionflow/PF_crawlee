@@ -1,0 +1,39 @@
+steps:
+  # Build the container image
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['build', '-t', 'gcr.io/$PROJECT_ID/office-agent-scraper', '.']
+  
+  # Push the image to Container Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'gcr.io/$PROJECT_ID/office-agent-scraper']
+  
+  # Deploy to Cloud Run
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - 'run'
+      - 'deploy'
+      - 'office-agent-scraper'
+      - '--image'
+      - 'gcr.io/$PROJECT_ID/office-agent-scraper'
+      - '--platform'
+      - 'managed'
+      - '--region'
+      - 'us-central1'
+      - '--memory'
+      - '2Gi'
+      - '--cpu'
+      - '1'
+      - '--timeout'
+      - '30m'
+      - '--set-env-vars'
+      - 'BUCKET_NAME=${_BUCKET_NAME},MODE=initial'
+      - '--service-account'
+      - '${_SERVICE_ACCOUNT}'
+
+images:
+  - 'gcr.io/$PROJECT_ID/office-agent-scraper'
+
+substitutions:
+  _BUCKET_NAME: office-agent-results
+  _SERVICE_ACCOUNT: office-agent-sa@$PROJECT_ID.iam.gserviceaccount.com 
