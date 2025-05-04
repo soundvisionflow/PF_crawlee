@@ -7,7 +7,9 @@
         "start": "node office_agent.cjs",
         "build": "npm install --production",
         "test": "TEST_PAGINATION=true node office_agent.cjs",
-        "test:pages": "TEST_PAGINATION=true MAX_PAGES=2 node office_agent.cjs"
+        "test:pages": "TEST_PAGINATION=true MAX_PAGES=2 node office_agent.cjs",
+        "initial": "MODE=initial node office_agent.cjs",
+        "daily": "MODE=update node office_agent.cjs"
     },
     "dependencies": {
         "puppeteer": "^22.8.2",

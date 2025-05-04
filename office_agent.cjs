@@ -29,10 +29,10 @@ function parseRelativeTime(relativeStr, baseDate = new Date()) {
 
 // Configuration
 const START_URLS = [
-  'https://www.propertyfinder.ae/en/search?c=3&t=4&fu=0&rp=y&ob=nd',
-  'https://www.propertyfinder.ae/en/commercial-rent/dubai/offices-for-rent.html',
-  'https://www.bayut.com/to-rent/offices/dubai/',
-  'https://www.dubizzle.com/property-for-rent/commercial/office/'
+  'https://www.propertyfinder.ae/en/search?c=3&t=4&fu=0&rp=n&ob=nd',
+  'https://www.propertyfinder.ae/en/commercial-buy/dubai/offices-for-sale.html',
+  'https://www.bayut.com/for-sale/offices/dubai/',
+  'https://www.dubizzle.com/property-for-sale/commercial/office/'
 ];
 const MIN_AREA_SQFT = 1500;
 const MONTHS_TO_LOOKBACK = 2;
