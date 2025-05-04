@@ -1,7 +1,7 @@
 const puppeteer = require('puppeteer');
 const fs = require('fs');
 const { Storage } = require('@google-cloud/storage');
-const { Parser } = require('json2csv');
+const createCsvWriter = require('csv-writer').createObjectCsvWriter;
 
 // Helper: convert relative time (e.g., "8 hours ago") to absolute Date
 function parseRelativeTime(relativeStr, baseDate = new Date()) {
@@ -116,14 +116,19 @@ async function runScraper() {
       await page.goto(url, { waitUntil: 'networkidle0' });
 
       // Wait for listings to appear
-      const ITEM_SELECTOR = 'li[role="listitem"], article, div.ListingCard, div.card, div[data-cy="listing-card"], div[data-testid="listing-card"]';
+      const ITEM_SELECTOR = 'li[role="listitem"], article, div.ListingCard, div.card, div[data-cy="listing-card"], div[data-testid="listing-card"], [data-qs="serp-card"]';
       let listingsExist = false;
       try {
         // In test mode, just check if container exists quickly
         // In scrape mode, wait longer for actual items
         const waitOptions = { timeout: TEST_PAGINATION ? 5000 : 60000 };
         await page.waitForSelector(ITEM_SELECTOR, waitOptions);
-        listingsExist = true;
+        
+        // Check if any elements actually exist
+        const elementsCount = await page.$$eval(ITEM_SELECTOR, els => els.length);
+        listingsExist = elementsCount > 0;
+        console.log(`Found ${elementsCount} listing elements on page ${currentPage}`);
+        
       } catch (e) {
         // Only treat TimeoutError as fatal if not in test mode
         if (!TEST_PAGINATION && e.name === 'TimeoutError') {
@@ -154,15 +159,47 @@ async function runScraper() {
       const listings = await page.evaluate(selector => {
         const elements = document.querySelectorAll(selector);
         return Array.from(elements).map(el => {
-          const title = el.querySelector('h2')?.innerText.trim() || null;
-          const location = el.querySelector('[class*="location"]')?.innerText.trim() || null;
-          const price = el.querySelector('[class*="price"]')?.innerText.trim() || null;
+          // Title - try different possible selectors
+          const titleSelectors = ['h2', '[data-qs="serp-property-title"]', '.property-title', '.listing-title'];
+          let title = null;
+          for (const sel of titleSelectors) {
+            const titleEl = el.querySelector(sel);
+            if (titleEl) {
+              title = titleEl.innerText.trim();
+              break;
+            }
+          }
+          
+          // Location - try different possible selectors
+          const locationSelectors = ['[class*="location"]', '[data-qs="serp-property-location"]', '.location', '.listing-location'];
+          let location = null;
+          for (const sel of locationSelectors) {
+            const locEl = el.querySelector(sel);
+            if (locEl) {
+              location = locEl.innerText.trim();
+              break;
+            }
+          }
+          
+          // Price - try different possible selectors
+          const priceSelectors = ['[class*="price"]', '[data-qs="serp-property-price"]', '.price', '.listing-price'];
+          let price = null;
+          for (const sel of priceSelectors) {
+            const priceEl = el.querySelector(sel);
+            if (priceEl) {
+              price = priceEl.innerText.trim();
+              break;
+            }
+          }
+          
+          // Area extraction
           let area = null;
           const allTexts = Array.from(el.querySelectorAll('*')).map(e => e.innerText || '');
           for (const txt of allTexts) {
             const match = txt.replace(/,/g, '').match(/(\d+)\s*sq[\s\.]*ft/i);
             if (match) { area = parseInt(match[1], 10); break; }
           }
+          
           // Extract listing date
           let listed = el.querySelector('time')?.innerText.trim() || el.querySelector('time')?.getAttribute('datetime') || null;
           if (!listed) {
@@ -174,7 +211,11 @@ async function runScraper() {
               }
             }
           }
+          
+          // URL extraction
           const url = el.querySelector('a')?.href || null;
+          
+          console.log(`Extracted: ${title || 'No title'} - ${area || 'No area'} sqft`);
           return { title, location, price, area, listed, url };
         });
       }, ITEM_SELECTOR);
@@ -230,9 +271,20 @@ async function runScraper() {
 
     // Save results only if not in test mode
     if (!TEST_PAGINATION) {
-      const fields = ['title','location','price','area','description','listed','url'];
-      const parser = new Parser({ fields });
-      fs.writeFileSync('results.csv', parser.parse(results));
+      const csvWriter = createCsvWriter({
+        path: 'results.csv',
+        header: [
+          {id: 'title', title: 'Title'},
+          {id: 'location', title: 'Location'},
+          {id: 'price', title: 'Price'},
+          {id: 'area', title: 'Area'},
+          {id: 'description', title: 'Description'},
+          {id: 'listed', title: 'Listed'},
+          {id: 'url', title: 'URL'}
+        ]
+      });
+      
+      await csvWriter.writeRecords(results);
       console.log(`Completed: ${results.length} listings saved to results.csv`);
       
       // Upload to GCS if configured
