@@ -29,10 +29,10 @@ function parseRelativeTime(relativeStr, baseDate = new Date()) {
 
 // Configuration
 const START_URLS = [
-  'https://www.propertyfinder.ae/en/commercial-rent/offices-for-rent-dubai?sort=newest',
   'https://www.propertyfinder.ae/en/search?c=3&t=4&fu=0&rp=y&ob=nd',
-  'https://www.bayut.com/to-rent/offices/dubai/?sort=newest',
-  'https://www.dubizzle.com/en/property-for-rent/commercial/offices/?sort=newest'
+  'https://www.propertyfinder.ae/en/commercial-rent/dubai/offices-for-rent.html',
+  'https://www.bayut.com/to-rent/offices/dubai/',
+  'https://www.dubizzle.com/property-for-rent/commercial/office/'
 ];
 const MIN_AREA_SQFT = 1500;
 const MONTHS_TO_LOOKBACK = 2;
@@ -75,9 +75,9 @@ function getRandomUserAgent() {
   const userAgents = [
     'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-    'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
     'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15',
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36 Edg/122.0.0.0'
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36 Edg/122.0.0.0',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:123.0) Gecko/20100101 Firefox/123.0'
   ];
   return userAgents[Math.floor(Math.random() * userAgents.length)];
 }
@@ -153,9 +153,45 @@ async function runScraper() {
       
       // Hide automation
       await page.evaluateOnNewDocument(() => {
-        Object.defineProperty(navigator, 'webdriver', { get: () => false });
-        Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
-        window.chrome = { runtime: {} };
+        // Override the navigator permissions
+        const originalQuery = window.navigator.permissions.query;
+        window.navigator.permissions.query = (parameters) => (
+          parameters.name === 'notifications' ?
+            Promise.resolve({ state: Notification.permission }) :
+            originalQuery(parameters)
+        );
+        
+        // Pass WebDriver test
+        Object.defineProperty(navigator, 'webdriver', {
+          get: () => false,
+        });
+        
+        // Pass Chrome test
+        window.navigator.chrome = {
+          runtime: {},
+        };
+        
+        // Pass plugins length test
+        Object.defineProperty(navigator, 'plugins', {
+          get: () => [
+            {},
+            {},
+            {},
+            {},
+            {},
+          ],
+        });
+        
+        // Pass languages test
+        Object.defineProperty(navigator, 'languages', {
+          get: () => ['en-US', 'en', 'ar'],
+        });
+        
+        // Spoof screen resolution
+        Object.defineProperty(window.screen, 'width', { get: () => 1920 + Math.floor(Math.random() * 10) });
+        Object.defineProperty(window.screen, 'height', { get: () => 1080 + Math.floor(Math.random() * 10) });
+        Object.defineProperty(window.screen, 'availWidth', { get: () => 1920 + Math.floor(Math.random() * 10) });
+        Object.defineProperty(window.screen, 'availHeight', { get: () => 1080 + Math.floor(Math.random() * 10) });
       });
       
       await page.setViewport({ 
@@ -168,9 +204,11 @@ async function runScraper() {
 
       // Add extra headers to appear more like a normal browser
       await page.setExtraHTTPHeaders({
-        'Accept-Language': 'en-US,en;q=0.9',
+        'Accept-Language': 'en-US,en;q=0.9,ar;q=0.8',
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
-        'Referer': 'https://www.google.com/'
+        'Referer': 'https://www.google.com/',
+        'Cache-Control': 'max-age=0',
+        'Connection': 'keep-alive'
       });
 
       // Log console messages from the browser
@@ -205,11 +243,33 @@ async function runScraper() {
           // Navigate with longer timeout and wait for network idle
           try {
             console.log(`Attempting to navigate to: ${url}`);
+            
+            // Navigate to target with random delays
             await page.goto(url, { 
               waitUntil: 'domcontentloaded', 
               timeout: 30000 
             });
             console.log('Page DOM loaded');
+            
+            // Simulate scrolling like a human would
+            await randomDelay(1000, 3000);
+            await page.evaluate(() => {
+              const totalHeight = document.body.scrollHeight;
+              let scrollPosition = 0;
+              const scrollStep = Math.floor(Math.random() * 100) + 300;
+              
+              const scrollInterval = setInterval(() => {
+                window.scrollBy(0, scrollStep);
+                scrollPosition += scrollStep;
+                
+                if (scrollPosition >= totalHeight) {
+                  clearInterval(scrollInterval);
+                }
+              }, 200);
+              
+              // Scroll for a few seconds
+              return new Promise(resolve => setTimeout(resolve, 3000));
+            });
             
             // Wait for network to settle with a random delay to appear more human-like
             await randomDelay(3000, 7000);
@@ -219,10 +279,19 @@ async function runScraper() {
             break; // Stop pagination on this site on navigation errors
           }
           
-          // Wait for listings to appear - try property finder selectors
-          const ITEM_SELECTOR = 'article, .card, [class*="Card"], [class*="card"], [data-qs="serp-card"], .property-card, .property-list-item, .listing-item, [class*="PropertyCard"], [class*="property-card"], [data-testid="card"], [data-testid="listing"]';
+          // Wait for listings to appear - use site-specific selectors based on domain
+          let ITEM_SELECTOR = 'article, .card, [class*="Card"], [class*="card"], .property-card, .property-list-item, .listing-item, [class*="PropertyCard"], [class*="property-card"], [data-testid="card"], [data-testid="listing"]';
           
-          console.log(`Waiting for elements matching selector: ${ITEM_SELECTOR}`);
+          // Add site-specific selectors
+          if (siteDomain.includes('propertyfinder')) {
+            ITEM_SELECTOR = '[data-qs="serp-card"], [data-cy="listing-card"], [data-testid="listing-card"], article, .card';
+          } else if (siteDomain.includes('bayut')) {
+            ITEM_SELECTOR = '[aria-label*="Listing"], [class*="listingCard"], .card, article[class*="ListItem"]';
+          } else if (siteDomain.includes('dubizzle')) {
+            ITEM_SELECTOR = '[data-testid="listing-card"], .listing, [class*="ListingItem"], article';
+          }
+          
+          console.log(`Using site-specific selector for ${siteDomain}: ${ITEM_SELECTOR}`);
           
           let listingsExist = false;
           try {
