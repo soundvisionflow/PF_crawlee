@@ -28,7 +28,7 @@ function parseRelativeTime(relativeStr, baseDate = new Date()) {
 }
 
 // Configuration
-const START_URL = 'https://www.propertyfinder.ae/en/search?l=1&c=3&t=4&fu=0&af=1500&ob=nd';
+const START_URL = 'https://www.example.com';
 const MIN_AREA_SQFT = 1500;
 const MONTHS_TO_LOOKBACK = 2;
 const META_FILE = 'lastRun.json';
@@ -91,44 +91,102 @@ async function runScraper() {
   try {
     // Configure Puppeteer launch options
     const launchOptions = {
-      headless: 'new',
+      headless: process.env.TEST_PAGINATION === 'true' ? false : 'new',
       args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
     };
     if (process.env.PUPPETEER_EXECUTABLE_PATH) {
       launchOptions.executablePath = process.env.PUPPETEER_EXECUTABLE_PATH;
     }
     
+    console.log(`Launching browser in ${launchOptions.headless ? 'headless' : 'visible'} mode`);
     browser = await puppeteer.launch(launchOptions);
     const page = await browser.newPage();
     await page.setViewport({ width: 1280, height: 800 });
+    
+    // Set a common browser user agent
+    await page.setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36');
+
+    // Log console messages from the browser
+    page.on('console', msg => console.log('BROWSER:', msg.text()));
+    
+    // Detect potential navigation issues
+    page.on('error', err => console.error('PAGE ERROR:', err));
+    page.on('pageerror', err => console.error('PAGE JS ERROR:', err));
 
     const TEST_PAGINATION = process.env.TEST_PAGINATION === 'true';
+    const MAX_PAGES = process.env.MAX_PAGES ? parseInt(process.env.MAX_PAGES) : null;
+    
     if (TEST_PAGINATION) {
       console.log('[PAGINATION TEST MODE]');
+      if (MAX_PAGES) {
+        console.log(`[TESTING ${MAX_PAGES} PAGES ONLY]`);
+      }
     }
 
     // Paginate via URL param
     const results = [];
     const seenUrls = new Set();
     for (let currentPage = 1; ; currentPage++) {
-      const url = `${START_URL}&page=${currentPage}`;
+      // Stop if we've reached the maximum number of pages to test
+      if (MAX_PAGES && currentPage > MAX_PAGES) {
+        console.log(`Reached maximum test pages (${MAX_PAGES}), stopping.`);
+        break;
+      }
+      
+      // Navigate to the appropriate page URL
+      const url = currentPage === 1 
+        ? START_URL 
+        : `${START_URL}?page=${currentPage}`;
+      
       console.log(`Loading page ${currentPage}: ${url}`);
-      await page.goto(url, { waitUntil: 'networkidle0' });
+      
+      // Navigate with longer timeout and wait for network idle
+      try {
+        console.log(`Attempting to navigate to: ${url}`);
+        await page.goto(url, { 
+          waitUntil: 'domcontentloaded', 
+          timeout: 30000 
+        });
+        console.log('Page DOM loaded');
+        
+        // Wait for network to settle
+        await new Promise(resolve => setTimeout(resolve, 5000));
+        console.log('Extra wait completed');
+      } catch (navigationError) {
+        console.error(`Navigation error: ${navigationError.message}`);
+        if (TEST_PAGINATION) {
+          await page.screenshot({ path: `page-${currentPage}-error.png` });
+          console.log(`Saved error screenshot as page-${currentPage}-error.png`);
+        }
+        break; // Stop on navigation errors
+      }
 
-      // Wait for listings to appear
-      const ITEM_SELECTOR = 'li[role="listitem"], article, div.ListingCard, div.card, div[data-cy="listing-card"], div[data-testid="listing-card"], [data-qs="serp-card"]';
+      // Wait for listings to appear - try simpler selectors for testing
+      const ITEM_SELECTOR = 'p, div, h1';
+      
+      console.log(`Waiting for elements matching selector: ${ITEM_SELECTOR}`);
+      
       let listingsExist = false;
       try {
-        // In test mode, just check if container exists quickly
-        // In scrape mode, wait longer for actual items
-        const waitOptions = { timeout: TEST_PAGINATION ? 5000 : 60000 };
-        await page.waitForSelector(ITEM_SELECTOR, waitOptions);
+        // First check if the page has content
+        const bodyText = await page.evaluate(() => document.body.innerText);
+        console.log(`Page body has ${bodyText.length} characters of text`);
         
-        // Check if any elements actually exist
-        const elementsCount = await page.$$eval(ITEM_SELECTOR, els => els.length);
+        // Check if any elements actually exist using querySelectorAll directly
+        const elementsCount = await page.evaluate((selector) => {
+          const elements = document.querySelectorAll(selector);
+          console.log(`Found ${elements.length} elements matching ${selector}`);
+          return elements.length;
+        }, ITEM_SELECTOR);
+        
         listingsExist = elementsCount > 0;
         console.log(`Found ${elementsCount} listing elements on page ${currentPage}`);
         
+        // If testing, take screenshot regardless of finding elements
+        if (TEST_PAGINATION) {
+          await page.screenshot({ path: `page-${currentPage}.png` });
+          console.log(`Saved screenshot as page-${currentPage}.png`);
+        }
       } catch (e) {
         // Only treat TimeoutError as fatal if not in test mode
         if (!TEST_PAGINATION && e.name === 'TimeoutError') {
@@ -150,7 +208,7 @@ async function runScraper() {
       console.log(`Listings container found on page ${currentPage}`);
       // Skip actual scraping in test mode
       if (TEST_PAGINATION) {
-        await page.waitForTimeout(1000); // Brief pause before next page in test
+        await new Promise(resolve => setTimeout(resolve, 1000)); // Brief pause before next page in test
         continue;
       }
       // --- Full Scrape Logic --- 
@@ -261,7 +319,11 @@ async function runScraper() {
       }
 
       // Throttle only in full scrape mode
-      await page.waitForTimeout(2000);
+      if (!TEST_PAGINATION) {
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      } else {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
       // Stop if no new/in-threshold items found (only in full scrape mode)
       if (!TEST_PAGINATION && !anyNew) {
         console.log('No new or in-threshold listings on page, ending pagination');
