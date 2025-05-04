@@ -29,10 +29,10 @@ function parseRelativeTime(relativeStr, baseDate = new Date()) {
 
 // Configuration
 const START_URLS = [
-  'https://www.propertyfinder.ae/en/commercial-rent/offices-for-rent-dubai',
-  'https://www.propertyfinder.ae/en/search?c=3&t=4&fu=0&rp=y',
-  'https://www.bayut.com/to-rent/offices/dubai/',
-  'https://www.dubizzle.com/en/property-for-rent/commercial/offices/'
+  'https://www.propertyfinder.ae/en/commercial-rent/offices-for-rent-dubai?sort=newest',
+  'https://www.propertyfinder.ae/en/search?c=3&t=4&fu=0&rp=y&ob=nd',
+  'https://www.bayut.com/to-rent/offices/dubai/?sort=newest',
+  'https://www.dubizzle.com/en/property-for-rent/commercial/offices/?sort=newest'
 ];
 const MIN_AREA_SQFT = 1500;
 const MONTHS_TO_LOOKBACK = 2;
@@ -357,6 +357,9 @@ async function runScraper() {
             }
 
             if (listedDate && listedDate >= thresholdDate) {
+              // Store the parsed date for sorting later
+              item.listedDate = listedDate;
+              
               if (item.url) {
                 // Visit detail page to get more info
                 try {
@@ -413,6 +416,18 @@ async function runScraper() {
 
     // Save results only if not in test mode
     if (!TEST_PAGINATION && results.length > 0) {
+      // Sort results by date (newest first)
+      results.sort((a, b) => {
+        // Parse dates from the listings
+        const dateA = a.listedDate || new Date();
+        const dateB = b.listedDate || new Date();
+        
+        // Sort newest first
+        return dateB - dateA;
+      });
+      
+      console.log(`Sorted ${results.length} listings by date (newest first)`);
+      
       const csvWriter = createCsvWriter({
         path: 'results.csv',
         header: [
