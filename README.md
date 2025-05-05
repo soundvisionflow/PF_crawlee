@@ -1,63 +1,72 @@
 # Office Agent
 
-A Node.js scraper for extracting office space listings for sale in Dubai.
+A web scraper for Dubai office space sales listings, designed to collect data from multiple real estate websites.
 
-## Features
+## Current Status
 
-- Extracts office space listings with area >= 1500 sqft
-- Filters listings from multiple real estate websites
-- Sorts results by newest first
-- Saves data to CSV format
-- Uses stealth mode to avoid detection
-- Handles pagination automatically
-- Supports initial database creation and daily updates
+The basic API infrastructure is deployed and working on Google Cloud Platform (GCP). The system is currently in Phase 1 of development, with the following components:
 
-## Supported Sites
+- **API Service**: A Cloud Run service that provides basic endpoints for health checks and a placeholder for the scraper
+- **Scheduler**: A Cloud Scheduler job configured to trigger the scraper daily at 10AM UAE time (6AM UTC)
+- **Storage**: A Cloud Storage bucket for storing scraped data
 
-- PropertyFinder UAE
-- Bayut UAE
-- Dubizzle UAE
+## API Endpoints
 
-## Usage
+- `GET /` or `GET /health`: Health check endpoint
+- `GET /version`: Returns version information
+- `POST /scrape`: Placeholder for the scraper functionality
 
-To create initial database (looks back 2 months):
-```
-npm run initial
-```
+## Architecture
 
-For daily updates (since last run):
-```
-npm run daily
-```
+The system consists of:
 
-For testing:
-```
-npm run test:pages
-```
+1. A Node.js application running on Cloud Run that will scrape real estate websites
+2. A Cloud Scheduler job that triggers the scraper daily
+3. A Cloud Storage bucket for storing the scraped data
+
+## Development Plan
+
+The project is being developed in phases:
+
+1. **Phase 1 (Current)**: Basic API infrastructure
+2. **Phase 2**: Implement scraper functionality with anti-detection measures
+3. **Phase 3**: Add monitoring, analytics, and reporting
+4. **Phase 4**: Enhance features and user interface
+
+See `implementation-plan.md` for detailed information.
 
 ## Deployment
 
-This project is configured to run on Google Cloud Run as a service. The deployment process:
+Deployment details are documented in `deployment-summary.md`.
 
-1. Automatically installs Chrome using the build script
-2. Sets up Node.js environment
-3. Installs dependencies
-4. Runs the scraper based on schedule
+## Local Development
 
-## Environment Variables
+To run the project locally:
 
-- `NODE_VERSION`: Set to 18.x or higher
-- `PUPPETEER_SKIP_CHROMIUM_DOWNLOAD`: Set to true (using system Chrome)
-- `BUCKET_NAME`: GCS bucket name for storing results
-- `MODE`: "initial" or "update" (determines scraping scope)
+```bash
+# Install dependencies
+npm install
 
-## Output
+# Start the server
+npm start
+```
 
-Results are saved to `results.csv` and uploaded to Google Cloud Storage with the following fields:
-- Title
-- Location
-- Price
-- Area (sqft)
-- Description
-- Listed Date
-- URL 
+## Manual Triggering
+
+To manually trigger the scraper:
+
+```bash
+curl -X POST https://office-agent-212383357993.asia-southeast1.run.app/scrape
+```
+
+## Future Improvements
+
+- Implement full scraping functionality
+- Add email notifications for new listings
+- Create a web dashboard for viewing results
+- Add support for more UAE real estate websites
+- Implement a database for better historical tracking
+
+## License
+
+Proprietary and confidential. 

@@ -8,7 +8,10 @@
 node_modules/
 npm-debug.log
 .env
-.env.*
+.env.local
+.env.development
+.env.test
+.env.production
 
 # Ignore test files
 test/
@@ -23,7 +26,6 @@ __tests__/
 # Ignore local results
 results.csv
 results/*.csv
-*.png
 
 # Ignore deployment files
 .gcloudignore
@@ -36,7 +38,4 @@ deployment-instructions.md
 .idea/
 *.sublime-*
 *.swp
-.DS_Store
-
-*.log
-storage/ 
+.DS_Store 
